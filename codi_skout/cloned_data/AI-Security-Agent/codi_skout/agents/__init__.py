@@ -1,11 +1,11 @@
-from .base_agent import BaseAgent#, AgentMessage
+from .base_agent import BaseAgent, AgentMessage
 from .github_cloner import GitHubClonerAgent
 from .security_analyst import CodeSecurityAnalystAgent
 from .code_reviewer import CodeReviewerAgent
 from .reporter import ReporterAgent
 
 __all__ = [
-    # 'AgentMessage',
+    'AgentMessage',
     'BaseAgent',
     'GitHubClonerAgent',
     'CodeSecurityAnalystAgent',

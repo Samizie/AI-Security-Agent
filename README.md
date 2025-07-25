@@ -1,117 +1,248 @@
-# CodiSkout
+# CodiSkout: AI-Powered Code & Security Auditing
 
-## Project Description
-CodiSkout is an AI-powered security orchestration tool designed to automate the process of identifying security vulnerabilities in GitHub repositories. It leverages Streamlit for an interactive user interface and Langchain for advanced AI capabilities, allowing users to clone repositories, scan codebases, identify vulnerabilities, and generate detailed security reports.
+CodiSkout is an AI-powered code and security auditing system that uses a multi-agent architecture based on the Model Context Protocol (MCP). The system analyzes GitHub repositories for security vulnerabilities, code quality issues, and provides comprehensive reports.
 
-## Features
-- **GitHub Repository Cloning**: Easily clone any public GitHub repository for analysis.
-- **Codebase Scanning**: Analyze the structure, views, and exposed URLs within the codebase.
-- **Vulnerability Identification**: Utilize AI to detect potential security vulnerabilities.
-- **Detailed Reporting**: Generate comprehensive JSON reports of all findings.
-- **Interactive UI**: A user-friendly Streamlit interface to interact with the agent and view results.
-- **Customizable**: Easily extendable to add new scanning capabilities or reporting formats.
+## Architecture Overview
+
+CodiSkout uses a modular MCP-based architecture that allows for easy extension and customization:
+
+```mermaid
+graph TD
+    subgraph "MCP Core"
+        A[Agent Orchestrator] --> B[Message Broker]
+        B --> C[Shared Context Manager]
+        A --> D[LLM Provider Registry]
+    end
+    
+    subgraph "LLM Providers"
+        D --> E[OpenAI Adapter]
+        D --> F[Claude Adapter]
+        D --> G[Groq Adapter]
+        D --> H[Custom Provider Adapter]
+    end
+    
+    subgraph "Agents"
+        I[Base Agent] --> A
+        I --> B
+        I --> C
+        I --> D
+        I --> J[GitHub Cloner]
+        I --> K[Security Analyst]
+        I --> L[Code Reviewer]
+        I --> M[Report Generator]
+        I --> N[Dependency Scanner]
+    end
+    
+    subgraph "UI/API"
+        O[Streamlit UI] --> A
+        O --> D
+        P[API Interface] --> A
+        P --> D
+    end
+```
+
+### Key Components
+
+1. **MCP Core**: The foundation of the architecture, providing infrastructure for agent communication, shared context, and LLM provider management.
+   - Message Broker: Handles communication between agents
+   - Shared Context Manager: Provides a shared knowledge base
+   - LLM Provider Registry: Manages different LLM providers
+
+2. **LLM Providers**: Adapters for different language model services.
+   - OpenAI Provider: For GPT models
+   - Anthropic Provider: For Claude models
+   - Groq Provider: For high-performance inference
+
+3. **Agents**: Specialized components that perform specific tasks.
+   - GitHub Cloner Agent: Clones repositories and analyzes structure
+   - Security Analyst Agent: Analyzes code for security vulnerabilities
+   - Code Reviewer Agent: Reviews code quality
+   - Report Generator Agent: Generates comprehensive reports
+
+4. **UI/API**: Interfaces for users to interact with the system.
+   - Streamlit UI: Web-based user interface
+   - API Interface: For programmatic access
 
 ## Installation
 
-To set up the AI-Security-Agent, follow these steps:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-org/codi-skout.git
+   cd codi-skout
+   ```
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/your-username/AI-Security-Agent.git
-    cd AI-Security-Agent
-    ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-2.  **Create a virtual environment** (recommended):
-    ```bash
-    python -m venv .venv
-    ```
-
-3.  **Activate the virtual environment**:
-    *   On Windows:
-        ```bash
-        .venv\Scripts\activate
-        ```
-    *   On macOS/Linux:
-        ```bash
-        source .venv/bin/activate
-        ```
-
-4.  **Install dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
-    (Note: A `requirements.txt` file will be generated or should be created with necessary dependencies like `streamlit`, `langchain`, etc.)
-
-5.  **Set up environment variables**:
-    Create a `.env` file in the root directory and add your API keys (e.g., for OpenAI, GitHub, etc.) if required by the agents.
-    ```
-    OPENAI_API_KEY="your_openai_api_key"
-    GITHUB_TOKEN="your_github_token"
-    ```
+3. Set up environment variables for API keys:
+   ```bash
+   export OPENAI_API_KEY=your_openai_api_key
+   export ANTHROPIC_API_KEY=your_anthropic_api_key
+   export GROQ_API_KEY=your_groq_api_key
+   ```
 
 ## Usage
 
-To run the Streamlit application:
+### Running the UI
 
-1.  **Activate your virtual environment** (if not already active):
-    *   On Windows:
-        ```bash
-        .venv\Scripts\activate
-        ```
-    *   On macOS/Linux:
-        ```bash
-        source .venv/bin/activate
-        ```
+Start the Streamlit UI:
 
-2.  **Run the Streamlit application**:
-    ```bash
-    streamlit run main.py
-    ```
-
-3.  Open your web browser and navigate to the URL provided by Streamlit (usually `http://localhost:8501`).
-
-## Project Structure
-
-```
-AI-Security-Agent/
-├── .dist/                  # Distribution files (if any)
-├── .gitignore              # Git ignore file
-├── README.md               # Project documentation
-├── ai_auditor/             # Main application source code
-│   ├── __init__.py
-│   ├── agents/             # AI agents for specific tasks (cloning, scanning, reporting)
-│   │   ├── __init__.py
-│   │   ├── base_agent.py
-│   │   ├── code_reviewer.py
-│   │   ├── github_cloner.py
-│   │   ├── reporter.py
-│   │   └── security_analyst.py
-│   ├── app.py              # Streamlit application entry point
-│   ├── cloning_data/       # Directory for cloned repository data (ignored by git)
-│   ├── config/             # Configuration files (prompts, settings)
-│   │   ├── __init__.py
-│   │   ├── prompts.py
-│   │   └── settings.py
-│   ├── core/               # Core logic (orchestration, data structures, message bus)
-│   │   ├── __init__.py
-│   │   ├── data_structures.py
-│   │   ├── message_bus.py
-│   │   └── orchestrator.py
-│   └── ui/                 # User interface components
-│       └── __init__.py
-├── data/                   # Directory for generated reports (ignored by git)
-└── main.py                 # Main script to run the Streamlit app
+```bash
+python -m codi_skout.app
 ```
 
-## Contributing
+The UI will be available at http://localhost:8501
 
-We welcome contributions to the AI-Security-Agent! Please follow these steps to contribute:
+### Using the API
 
-1.  Fork the repository.
-2.  Create a new branch for your feature or bug fix.
-3.  Make your changes and ensure they are well-tested.
-4.  Commit your changes with clear and concise messages.
-5.  Push your branch to your forked repository.
-6.  Open a pull request to the `main` branch of the original repository.
+The API provides endpoints for analyzing repositories and managing LLM providers:
 
-Please ensure your code adheres to the existing coding style and includes appropriate documentation.
+```python
+import requests
+
+# Analyze a repository
+response = requests.post(
+    "http://localhost:8000/api/analyze",
+    json={
+        "repo_url": "https://github.com/username/repository",
+        "provider": {
+            "name": "groq",
+            "model": "llama-3.1-8b-instant",
+            "api_key": "your_provider_api_key"
+        },
+        "options": {
+            "deep_analysis": True,
+            "include_deps": True,
+            "parallel_execution": True
+        }
+    }
+)
+
+task_id = response.json()["task_id"]
+
+# Get analysis results
+results = requests.get(f"http://localhost:8000/api/analysis/{task_id}/results")
+```
+
+## Extending the System
+
+### Adding a New LLM Provider
+
+1. Create a new file in the `llm/` directory, e.g., `llm/new_provider.py`
+2. Implement the `LLMProvider` interface
+3. Register the provider in `provider_factory.py`
+
+Example:
+
+```python
+from typing import Dict, Any, List, Optional
+import logging
+
+from .base_provider import LLMProvider
+
+class NewProvider(LLMProvider):
+    """Provider for New LLM API"""
+    
+    provider_name = "new_provider"
+    
+    def __init__(self, api_key: str, **kwargs):
+        super().__init__(**kwargs)
+        self.api_key = api_key
+        self.default_model = kwargs.get("default_model", "default-model")
+    
+    def generate_text(self, prompt: str, **kwargs) -> str:
+        """Generate text from a prompt"""
+        # Implement text generation using the provider's API
+        # ...
+        return generated_text
+    
+    def generate_chat_response(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """Generate a response from a chat history"""
+        # Implement chat completion using the provider's API
+        # ...
+        return response
+    
+    @property
+    def available_models(self) -> List[str]:
+        """Get the list of available models"""
+        return [
+            "model-1",
+            "model-2"
+        ]
+```
+
+### Adding a New Agent
+
+1. Create a new file in the `agents/` directory, e.g., `agents/new_agent.py`
+2. Implement the `BaseAgent` interface
+3. Register the agent in `agent_factory.py`
+
+Example:
+
+```python
+from typing import Dict, Any
+import logging
+
+from .base_agent import BaseAgent
+from core.mcp_client import MCPClient
+
+class NewAgent(BaseAgent):
+    """A new agent for specific functionality"""
+    
+    def __init__(self, mcp_client: MCPClient):
+        super().__init__("NewAgent", mcp_client)
+        
+        # Watch for repository context changes
+        self.watch_context("repo")
+    
+    def process_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process the main task for this agent"""
+        try:
+            # Update status in shared context
+            self.set_context("repo/analysis_status/new_agent", "in_progress")
+            
+            # Implement agent-specific functionality
+            # ...
+            
+            # Update status in shared context
+            self.set_context("repo/analysis_status/new_agent", "completed")
+            
+            return {
+                'success': True,
+                'agent': self.name,
+                'result': result,
+                'message': "Task completed successfully"
+            }
+            
+        except Exception as e:
+            # Update status in shared context
+            self.set_context("repo/analysis_status/new_agent", "failed")
+            
+            self.logger.error(f"Error in task processing: {str(e)}")
+            return {
+                'success': False,
+                'agent': self.name,
+                'error': str(e),
+                'message': f"Task failed: {str(e)}"
+            }
+```
+
+## Running Tests
+
+Run all tests:
+
+```bash
+python -m codi_skout.tests.run_tests
+```
+
+Run specific test modules:
+
+```bash
+python -m codi_skout.tests.run_tests test_core_components test_agents
+```
+
+## License
+
+[MIT License](LICENSE)

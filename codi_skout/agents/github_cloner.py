@@ -1,32 +1,44 @@
 import os
 import stat
-import tempfile
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Any
 import re
-
+import logging
 
 from .base_agent import BaseAgent
+from core.mcp_client import MCPClient
 from config.constants import SECURITY_PATTERNS, URL_PATTERNS, CODE_EXTENSIONS, ENDPOINT_PATTERNS
 
-
-# GitHub Cloner Agent
 class GitHubClonerAgent(BaseAgent):
     """Agent responsible for cloning GitHub repositories"""
     
-    def __init__(self, api_key: str):
-        super().__init__("GitHubCloner", api_key)
+    def __init__(self, mcp_client: MCPClient):
+        super().__init__("GitHubCloner", mcp_client)
         self.temp_dir = None
+        
+        # Watch for repository context changes
+        self.watch_context("repo")
     
     def process_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """Clone repository and analyze basic structure"""
         repo_url = task_data.get('repo_url')
         
         try:
+            # Update status in shared context
+            self.set_context("repo/analysis_status/cloning", "in_progress")
+            
             # Clone repository
             clone_result = self.clone_repository(repo_url)
+            
+            # Initialize repository context
+            repo_context_manager = self.get_context("repo_context_manager")
+            if repo_context_manager:
+                repo_context_manager.initialize_repo_context(
+                    repo_url=repo_url,
+                    repo_path=clone_result['repo_path']
+                )
             
             # Analyze basic structure
             structure = self.analyze_code_structure(clone_result['repo_path'])
@@ -36,6 +48,36 @@ class GitHubClonerAgent(BaseAgent):
                 clone_result['repo_path'], 
                 structure['exposed_urls']
             )
+            
+            # Update repository context with files
+            if repo_context_manager:
+                repo_files = []
+                for file_path in structure['files']:
+                    ext = Path(file_path).suffix.lower()
+                    repo_files.append({
+                        "path": file_path,
+                        "language": ext[1:] if ext in CODE_EXTENSIONS else None,
+                        "size": os.path.getsize(os.path.join(clone_result['repo_path'], file_path)),
+                        "is_security_related": file_path in structure['security_files'],
+                        "is_config": file_path in structure['config_files'],
+                        "is_test": "test" in file_path.lower() or "spec" in file_path.lower()
+                    })
+                
+                repo_context_manager.update_repo_files(repo_files)
+                
+                # Add API endpoints
+                for endpoint in endpoints:
+                    repo_context_manager.add_api_endpoint({
+                        "path": endpoint.get("endpoint", ""),
+                        "method": endpoint.get("type", "GET"),
+                        "file_path": endpoint.get("file", ""),
+                        "line_number": None,
+                        "description": None,
+                        "authentication_required": None
+                    })
+            
+            # Update status in shared context
+            self.set_context("repo/analysis_status/cloning", "completed")
             
             result = {
                 'success': True,
@@ -49,6 +91,10 @@ class GitHubClonerAgent(BaseAgent):
             return result
             
         except Exception as e:
+            # Update status in shared context
+            self.set_context("repo/analysis_status/cloning", "failed")
+            
+            self.logger.error(f"Error cloning repository: {str(e)}")
             return {
                 'success': False,
                 'error': str(e),
@@ -61,7 +107,6 @@ class GitHubClonerAgent(BaseAgent):
             repo_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "")
             base_dir = Path(__file__).resolve().parent.parent / "cloning_data"
             base_dir.mkdir(parents=True, exist_ok=True)
-
 
             self.temp_dir = str(base_dir / repo_name)
 
@@ -76,13 +121,9 @@ class GitHubClonerAgent(BaseAgent):
             )
             
             if result.returncode != 0:
-                #raise Exception(f"Git clone failed: {result.stderr}")
-                print("CLONE STDOUT:", result.stdout)
-                print("CLONE STDERR:", result.stderr)
+                self.logger.error(f"Git clone failed: {result.stderr}")
                 raise Exception(f"Git clone failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
             
-                
-
             return {
                 'success': True,
                 'repo_path': self.temp_dir,
@@ -104,8 +145,6 @@ class GitHubClonerAgent(BaseAgent):
             'exposed_urls': [],
             'database_configs': []
         }
-        
-
         
         try:
             for root, dirs, files in os.walk(repo_path):
@@ -135,7 +174,6 @@ class GitHubClonerAgent(BaseAgent):
                         structure['exposed_urls'].append(relative_path)
             
             structure['languages'] = list(structure['languages'])
-            #print(structure)
             return structure
             
         except Exception as e:
@@ -175,227 +213,11 @@ class GitHubClonerAgent(BaseAgent):
     def handle_remove_readonly(func, path, exc_info):
         os.chmod(path, stat.S_IWRITE)
         func(path)
-
-
+    
     def cleanup(self):
         """Clean up temporary files"""
         if self.temp_dir and os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir, onerror=self.handle_remove_readonly)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# import os
-# import json
-# import stat
-# import shutil
-# import subprocess
-# from pathlib import Path
-# from typing import List, Dict, Any
-
-# from langchain.chains import LLMChain
-# from langchain.prompts import PromptTemplate
-
-# from .base_agent import BaseAgent
-
-
-# class GitHubClonerAgent(BaseAgent):
-#     """Agent responsible for cloning and analyzing GitHub repositories."""
-
-#     def __init__(self, api_key: str):
-#         super().__init__("GitHubCloner", api_key)
-#         self.temp_dir = None
-
-#     def process_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
-#         repo_url = task_data.get('repo_url')
-#         try:
-#             clone_result = self.clone_repository(repo_url)
-#             file_list = self.collect_file_metadata(clone_result['repo_path'])
-
-#             structure = self.analyze_structure_with_prompt(file_list)
-#             code_snippets = self.extract_code_from_files(clone_result['repo_path'], structure.get("exposed_urls", []))
-#             endpoints = self.extract_endpoints_with_prompt(code_snippets)
-
-#             return {
-#                 'success': True,
-#                 'repo_url': repo_url,
-#                 'repo_path': clone_result['repo_path'],
-#                 'structure': {**structure, 'files': file_list},
-#                 'endpoints': endpoints,
-#                 'message': f"Successfully cloned and analyzed {repo_url}"
-#             }
-
-#         except Exception as e:
-#             return {
-#                 'success': False,
-#                 'error': str(e),
-#                 'message': f"Failed to clone or analyze repository: {str(e)}"
-#             }
-
-#     def clone_repository(self, repo_url: str) -> Dict[str, Any]:
-#         try:
-#             repo_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "")
-#             base_dir = Path(__file__).resolve().parent.parent / "cloning_data"
-#             base_dir.mkdir(parents=True, exist_ok=True)
-#             self.temp_dir = str(base_dir / repo_name)
-
-#             if os.path.exists(self.temp_dir):
-#                 shutil.rmtree(self.temp_dir, onerror=self.handle_remove_readonly)
-
-#             result = subprocess.run(
-#                 ['git', 'clone', repo_url, self.temp_dir],
-#                 capture_output=True,
-#                 text=True,
-#                 timeout=300
-#             )
-
-#             if result.returncode != 0:
-#                 raise Exception(f"Git clone failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
-
-#             return {
-#                 'success': True,
-#                 'repo_path': self.temp_dir,
-#                 'stdout': result.stdout,
-#                 'stderr': result.stderr
-#             }
-
-#         except Exception as e:
-#             raise Exception(f"Failed to clone repository: {str(e)}")
-
-#     def collect_file_metadata(self, repo_path: str) -> List[str]:
-#         files = []
-#         for root, dirs, filenames in os.walk(repo_path):
-#             dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', '__pycache__', 'venv']]
-#             for filename in filenames:
-#                 if filename.startswith('.'):
-#                     continue
-#                 rel_path = os.path.relpath(os.path.join(root, filename), repo_path)
-#                 files.append(rel_path)
-#         return files
-
-#     def analyze_structure_with_prompt(self, file_list: List[str]) -> Dict[str, Any]:
-#         prompt = PromptTemplate(
-#             input_variables=["file_list"],
-#             template="""
-#             You are a static code analyzer. Below is a list of file paths from a repository:
-
-#             {file_list}
-
-#             Based on typical naming conventions and extensions, categorize them into:
-#             - config_files
-#             - security_files
-#             - exposed_urls
-#             - database_configs
-#             - languages (by extension only)
-
-#             - You must respond in valid JSON no other explanation:
-#             {{"config_files": [...], "security_files": [...], "exposed_urls": [...], "database_configs": [...], "languages": [...]}}
-#                         """
-#         )
-
-#         chain = LLMChain(llm=self.llm, prompt=prompt)
-#         formatted_input = "\n".join(file_list)
-#         response = chain.run(file_list=formatted_input)
-
-#         try:
-#             return json.loads(response)
-#         except json.JSONDecodeError:
-#             print("Warning: Failed to parse LLM output as JSON.\nResponse:", response)
-#             return {
-#                 "config_files": [],
-#                 "security_files": [],
-#                 "exposed_urls": [],
-#                 "database_configs": [],
-#                 "languages": []
-#             }
-
-#     def extract_code_from_files(self, repo_path: str, url_files: List[str], max_chars=1500) -> str:
-#         snippets = []
-#         for path in url_files:
-#             full_path = os.path.join(repo_path, path)
-#             if os.path.exists(full_path):
-#                 try:
-#                     with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
-#                         code = f.read()[:max_chars]
-#                         snippets.append(f"\n--- {path} ---\n{code}")
-#                 except Exception:
-#                     continue
-#         return "\n".join(snippets)
-
-#     def extract_endpoints_with_prompt(self, code_snippets: str) -> List[Dict[str, str]]:
-#         prompt = PromptTemplate(
-#             input_variables=["code_snippets"],
-#             template="""
-#                 You are a senior backend engineer. Given the following code snippets from various files:
-
-#                 {code_snippets}
-
-#                 - Extract all HTTP endpoints
-#                 - return a JSON list no explanations, just the JSON:
-#                 [
-#                 {{"endpoint": "/api/...", "file": "file_name.py", "method": "GET/POST", "framework": "Flask/Express/Django"}}
-#                 ]
-#                             """
-#         )
-
-#         chain = LLMChain(llm=self.llm, prompt=prompt)
-#         response = chain.run(code_snippets=code_snippets)
-
-#         try:
-#             return json.loads(response)
-#         except json.JSONDecodeError:
-#             print("Warning: Endpoint extraction returned invalid JSON.\nResponse:", response)
-#             return []
-
-#     @staticmethod
-#     def handle_remove_readonly(func, path, exc_info):
-#         os.chmod(path, stat.S_IWRITE)
-#         func(path)
-
-#     def cleanup(self):
-#         if self.temp_dir and os.path.exists(self.temp_dir):
-#             shutil.rmtree(self.temp_dir, onerror=self.handle_remove_readonly)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
+        
+        # Call parent cleanup
+        super().cleanup()

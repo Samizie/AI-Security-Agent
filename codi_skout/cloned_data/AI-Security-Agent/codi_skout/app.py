@@ -4,25 +4,11 @@ from typing import Dict, Any
 from datetime import datetime
 import pandas as pd
 import time
-import logging
 
-from core.context_init import initialize_context_system
-from core.llm_provider_registry import LLMProviderRegistry
-from llm.provider_factory import LLMProviderFactory
-from core.orchestrator import SecurityOrchestrator
-from ui.components import (
-    render_provider_selection,
-    render_agent_status,
-    render_analysis_options,
-    render_progress_tracking,
-    update_progress
-)
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+from core import SecurityOrchestrator
+
+
 
 # Streamlit UI
 def main():
@@ -57,38 +43,45 @@ def main():
     st.title("🤖 CodiSkout")
     st.markdown("**Intelligent AI agents working together to secure your codebase**")
     
-    # Initialize session state
-    if 'context_system' not in st.session_state:
-        st.session_state.context_system = initialize_context_system()
-    
-    if 'llm_registry' not in st.session_state:
-        st.session_state.llm_registry = LLMProviderRegistry()
-    
     # Agent Status Dashboard
-    agents = [
-        {
-            "name": "Repo Cloner",
-            "description": "Clones repositories and analyzes structure",
-            "status": "ready"
-        },
-        {
-            "name": "Security Analyst",
-            "description": "Scans for vulnerabilities and security issues",
-            "status": "ready"
-        },
-        {
-            "name": "Code Reviewer",
-            "description": "Reviews code quality and best practices",
-            "status": "ready"
-        },
-        {
-            "name": "Report Generator",
-            "description": "Collates and formats comprehensive reports",
-            "status": "ready"
-        }
-    ]
+    st.markdown("### 🎯 Agent Status")
+    col1, col2, col3, col4 = st.columns(4)
     
-    render_agent_status(agents)
+    with col1:
+        st.markdown("""
+        <div class="agent-card">
+            <h4>Repo Cloner</h4>
+            <p>Clones repositories and analyzes structure</p>
+            <span style="color: green;">●</span> Ready
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="agent-card">
+            <h4>Security Analyst</h4>
+            <p>Scans for vulnerabilities and security issues</p>
+            <span style="color: green;">●</span> Ready
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="agent-card">
+            <h4>Code Reviewer</h4>
+            <p>Reviews code quality and best practices</p>
+            <span style="color: green;">●</span> Ready
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown("""
+        <div class="agent-card">
+            <h4>Report Generator</h4>
+            <p>Collates and formats comprehensive reports</p>
+            <span style="color: green;">●</span> Ready
+        </div>
+        """, unsafe_allow_html=True)
     
     # Configuration
     st.markdown("### ⚙️ Configuration")
@@ -96,26 +89,19 @@ def main():
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        # Get available providers
-        available_providers = LLMProviderFactory.get_available_providers()
-        
-        # Render provider selection
-        provider_config = render_provider_selection(available_providers)
-        
-        repo_url = st.text_input(
-            "GitHub Repository URL", 
-            placeholder="https://github.com/username/repository",
-            help="Enter the GitHub repository URL to analyze"
-        )
+        api_key = st.text_input("Groq API Key", type="password", help="Enter your Groq API key")
+        repo_url = st.text_input("GitHub Repository URL", 
+                                placeholder="https://github.com/username/repository",
+                                help="Enter the GitHub repository URL to analyze")
     
     with col2:
-        # Render analysis options
-        analysis_options = render_analysis_options()
-    
-    if not provider_config["api_key"]:
-        provider_name = available_providers[provider_config["provider"]]["name"]
-        st.warning(f"⚠️ Please enter your {provider_name} API key to continue.")
-        st.info(f"You can get a free API key from [{provider_name} website]")
+        st.markdown("#### Analysis Options")
+        deep_analysis = st.checkbox("Deep Analysis", value=True, help="Perform comprehensive analysis")
+        include_deps = st.checkbox("Include Dependencies", value=True, help="Analyze dependency vulnerabilities")
+        
+    if not api_key:
+        st.warning("⚠️ Please enter your Groq API key to continue.")
+        st.info("You can get a free API key from [Groq Console](https://console.groq.com/)")
         st.stop()
     
     # Analysis Button
@@ -124,120 +110,85 @@ def main():
             st.error("❌ Please enter a GitHub repository URL")
             return
         
-        # Register the LLM provider
-        try:
-            provider = LLMProviderFactory.create_provider(
-                provider_name=provider_config["provider"],
-                api_key=provider_config["api_key"],
-                default_model=provider_config["model"],
-                temperature=provider_config["temperature"]
-            )
-            
-            # Register with the registry
-            st.session_state.llm_registry.register_provider(provider.__class__)
-            provider_instance = st.session_state.llm_registry.create_provider_instance(
-                provider_config["provider"],
-                api_key=provider_config["api_key"],
-                default_model=provider_config["model"],
-                temperature=provider_config["temperature"]
-            )
-            
-            # Set as default
-            st.session_state.llm_registry.set_default_provider(provider_config["provider"])
-            
-        except Exception as e:
-            st.error(f"❌ Failed to initialize LLM provider: {str(e)}")
-            return
-        
         # Initialize orchestrator
-        orchestrator = SecurityOrchestrator(
-            message_broker=st.session_state.context_system["message_broker"],
-            shared_context=st.session_state.context_system["shared_context"],
-            llm_registry=st.session_state.llm_registry
-        )
+        orchestrator = SecurityOrchestrator(api_key)
         
         # Progress tracking
         progress_container = st.container()
         
         with progress_container:
-            # Define analysis stages
-            stages = [
-                {"id": "cloning", "name": "Repo Cloner"},
-                {"id": "security", "name": "Security Analyst"},
-                {"id": "code_review", "name": "Code Reviewer"},
-                {"id": "report", "name": "Reporter"}
-            ]
+            st.markdown("### 🔄 Analysis Progress")
             
-            # Render progress tracking
-            progress_ui = render_progress_tracking(stages)
+            # Create progress bars for each agent
+            cloner_progress = st.progress(0)
+            cloner_status = st.empty()
+            
+            security_progress = st.progress(0)
+            security_status = st.empty()
+            
+            review_progress = st.progress(0)
+            review_status = st.empty()
+            
+            report_progress = st.progress(0)
+            report_status = st.empty()
             
             # Start analysis
-            update_progress(progress_ui, "cloning", 0.1, "in_progress", "Repo Cloner: Initializing...")
+            cloner_status.text("🔄 Repo Cloner: Initializing...")
+            cloner_progress.progress(10)
+            
             
             try:
                 # Run orchestrated analysis
-                update_progress(progress_ui, "cloning", 0.5, "in_progress", "Repo Cloner: Cloning repository...")
+                #cloner_status.text("🔄 Repo Cloner: Cloning repository...")
+                cloner_progress.progress(50)
                 with st.spinner("🔄 Repo Cloner: Cloning repository..."):
                     time.sleep(1.0)
                 
-                update_progress(progress_ui, "security", 0, "waiting", "Security Analyst: Standby...")
-                update_progress(progress_ui, "code_review", 0, "waiting", "Code Reviewer: Standby...")
-                update_progress(progress_ui, "report", 0, "waiting", "Reporter: Standby...")
+                security_status.text("🔒 Security Analyst: Standby...")
+                review_status.text("📝 Code Reviewer: Standby...")
+                report_status.text("📊 Reporter: Standby...")
                 
                 # Execute analysis
-                result = orchestrator.orchestrate_analysis(
-                    repo_url,
-                    config={
-                        "deep_analysis": analysis_options["deep_analysis"],
-                        "include_deps": analysis_options["include_deps"],
-                        "parallel_execution": analysis_options["parallel_execution"]
-                    }
-                )
+                result = orchestrator.orchestrate_analysis(repo_url)
                 
                 if result['success']:
                     # Update progress
-                    update_progress(progress_ui, "cloning", 1.0, "completed", "Repo Cloner: Repository cloned")
+                    cloner_status.text("✅ Repo Cloner: Repository cloned")
+                    cloner_progress.progress(100)
                     
-                    update_progress(progress_ui, "security", 0.5, "in_progress", "Security Analyst: Running security analysis...")
+                    #security_status.text("🔒 Security Analyst: Running security analysis...")
+                    security_progress.progress(50)
                     with st.spinner("🔒 Security Analyst: Running security analysis..."):
                         time.sleep(3.0)
                     
-                    update_progress(progress_ui, "security", 1.0, "completed", "Security Analyst: Security analysis completed")
+                    security_status.text("✅ Security Analyst: Security analysis completed")
+                    security_progress.progress(100)
                     
-                    update_progress(progress_ui, "code_review", 0.5, "in_progress", "Code Reviewer: Reviewing code quality...")
+                    #review_status.text("📝 Code Reviewer: Reviewing code quality...")
+                    review_progress.progress(50)
                     with st.spinner("📝 Code Reviewer: Reviewing code quality..."):
                         time.sleep(2.0)
                     
-                    update_progress(progress_ui, "code_review", 1.0, "completed", "Code Reviewer: Code review completed")
+                    review_status.text("✅ Code Reviewer: Code review completed")
+                    review_progress.progress(100)
                     
-                    update_progress(progress_ui, "report", 0.5, "in_progress", "Reporter: Generating comprehensive report...")
+                    #report_status.text("📊 Reporter: Generating comprehensive report...")
+                    report_progress.progress(50)
                     with st.spinner("📊 Reporter: Generating comprehensive report..."):
                         time.sleep(1.0)
                     
-                    update_progress(progress_ui, "report", 1.0, "completed", "Reporter: Report generated successfully")
+                    report_status.text("✅ Reporter: Report generated successfully")
+                    report_progress.progress(100)
                     
                     # Display results
                     st.success("Analysis completed successfully")
                     display_analysis_results(result['results'])
                     
                 else:
-                    # Update progress for failure
-                    if "clone" in result.get('error', '').lower():
-                        update_progress(progress_ui, "cloning", 1.0, "failed", f"Repo Cloner: {result.get('message', 'Failed to clone repository')}")
-                    elif "security" in result.get('error', '').lower():
-                        update_progress(progress_ui, "security", 1.0, "failed", f"Security Analyst: {result.get('message', 'Security analysis failed')}")
-                    elif "code" in result.get('error', '').lower():
-                        update_progress(progress_ui, "code_review", 1.0, "failed", f"Code Reviewer: {result.get('message', 'Code review failed')}")
-                    elif "report" in result.get('error', '').lower():
-                        update_progress(progress_ui, "report", 1.0, "failed", f"Reporter: {result.get('message', 'Report generation failed')}")
-                    else:
-                        st.error(f"❌ Analysis failed: {result.get('message', 'Unknown error')}")
+                    st.error(f"❌ Analysis failed: {result.get('message', 'Unknown error')}")
                     
             except Exception as e:
                 st.error(f"❌ An error occurred during analysis: {str(e)}")
-                
-                # Clean up
-                orchestrator.cleanup()
 
 def display_analysis_results(results: Dict[str, Any]):
     """Display the analysis results in a structured format"""
@@ -247,6 +198,7 @@ def display_analysis_results(results: Dict[str, Any]):
     
     # Get the final report
     report_data = results['report']['report'] if results['report']['success'] else None
+    print(report_data)
     
     if not report_data:
         st.error("❌ Unable to generate comprehensive report")
