@@ -205,7 +205,7 @@ def display_analysis_results(results: Dict[str, Any]):
         return
     
     # Executive Summary
-    st.markdown("### 📋 Executive Summary")
+    st.markdown("### Report Summary")
     
     summary = report_data['executive_summary']
     repo_overview = report_data['repository_overview']
